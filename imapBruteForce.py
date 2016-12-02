@@ -26,7 +26,7 @@
 
 
 
-import imapclient, backports
+import imapclient, backports, itertools
 
 addressList = [] #put the target addresses here in list format e.g ['test1@test.com','test2@test.com']
 wordlist = [] #put your wordlist/dictionary here in list format e.g ['test1','test2']

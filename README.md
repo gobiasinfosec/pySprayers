@@ -1,5 +1,5 @@
 # imapBruteForce/Password Spraying
-This python script can be used to brute force imap logins where account lockout has not been tuned or disabled for imap logins.
+This python script can be used to brute force imap logins where account lockout has not been turned off or disabled for imap logins.
 
 It may also be used as a password spraying script.
 

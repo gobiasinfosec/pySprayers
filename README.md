@@ -12,5 +12,5 @@ It has not (yet) been optimized for threading.
 -Written for Python3.5
 -Requires the imapclient library (pip3 install imapclient)
 
-## Disclaimer:
+### Disclaimer:
 -This tool has been provided for testing and academic purposes only. Do not use this tool on accounts that you do not own or have express/strict written consent to test against. Do not use for illegal purposes!

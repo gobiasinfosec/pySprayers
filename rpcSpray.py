@@ -8,6 +8,10 @@
 #
 # To do:
 #   -   Add in time delay feature
+#
+# Example Usage:
+# python3 rpcSpray.py -u user -p password -t 127.0.0.1 -o output.txt
+# python3 rpcSpray.py -U userlist.txt -P passwordlist.txt -t 127.0.0.1 -o output.txt
 
 import subprocess, argparse
 

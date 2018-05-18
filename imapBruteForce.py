@@ -1,5 +1,8 @@
 #! python3
 # imapBruteForce.py - Author: David Sullivan
+#
+# note: this is clunky and is probably less useful than a tool like hydra or medusa but was a fun project to make
+#
 # version   1.1     -   Updated 12/3/2016
 #           1.2     -   Updated 02/15/2018
 #

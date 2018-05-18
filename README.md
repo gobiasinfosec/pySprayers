@@ -3,6 +3,7 @@ This python script uses rpcclient to attempt to connect to an rpcserver and spra
 
 ### Usage:
 python3 rpcSpray.py -u user -p password -t 127.0.0.1 -o output.txt
+
 python3 rpcSpray.py -U userlist.txt -P passwordlist.txt -t 127.0.0.1 -o output.txt
 
 -------------------------------------------------------------------------------------------------------

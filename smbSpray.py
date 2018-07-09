@@ -77,7 +77,7 @@ def main():
     parser.add_argument('-P', '--passwordlist', help='Location of passwords list')
     parser.add_argument('-p', '--password', help='Use a single password')
     parser.add_argument('-t', '--target', help='Target IP address')
-    parser.add_argument('-o', '--output', help='Target IP address')
+    parser.add_argument('-o', '--output', help='Output file name')
     args = parser.parse_args()
 
     # set list of users
@@ -113,7 +113,7 @@ def main():
         output = None
 
     # run the program
-    sprayer(users, passwords, target, output)
+    sprayer(domain, users, passwords, target, output)
 
 
 main()

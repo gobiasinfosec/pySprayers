@@ -56,8 +56,12 @@ def sprayer(user_list, password_list, target_ip, output):
                 quit()
             # check to see if the account is locked out, if so, print out the account and remove from spraying list
             elif answer == "Cannot connect to server.  Error was NT_STATUS_ACCOUNT_LOCKED_OUT\n":
+                user_diff = set(user_list_clean) - set(temp_users)
                 print(answer.replace("\n", "") + " using the account " + user)
-                temp_users.remove(user)
+                print('Stopping script due to account lockout')
+                print('The following accounts are expired, disabled or cracked:')
+                print(user_diff)
+                quit()
             # if logon fails, drop the response, any other response, print to screen and remove account from spraying
             elif answer != "Cannot connect to server.  Error was NT_STATUS_LOGON_FAILURE\n":
                 print(answer.replace("\n", "") + " using the password " + password + " and the account " + user)

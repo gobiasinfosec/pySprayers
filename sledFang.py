@@ -23,12 +23,20 @@ def write_output(user, password, output):
     new_cred = '%s:%s\n' % (user, password)
 
     # open the output file, check to see if the new credential has already been found, if not, add to file
-    file = open(output, 'a+')
-    for cred in file:
-        creds.append(cred)
-    if new_cred not in creds:
-        file.write(new_cred)
-    file.close()
+    try:
+        file = open(output, 'r+')
+        for cred in file:
+            creds.append(cred)
+        file.close()
+        file = open(output, 'a+')
+        if new_cred not in creds:
+            file.write(new_cred)
+        file.close()
+    except:
+        file = open(output, 'a+')
+        if new_cred not in creds:
+            file.write(new_cred)
+        file.close()
 
 
 def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose):

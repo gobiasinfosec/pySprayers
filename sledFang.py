@@ -72,26 +72,28 @@ def printColor(color_input, color):
 
 # this function allows the user spraying to be multi-threaded
 def user_attack(user_list, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
-                temp_users, rate_limit):
+                temp_users, rate_limit, threading):
 
-    # check number of cpus
-    cpus = multiprocessing.cpu_count()
-    # check if rate limiting is enabled
-    if rate_limit > 0:
-        time.sleep(rate_limit)
-        cpus = 1
+    # check if multiprocessing is being used, if so
+    if threading > 0:
+        # create a pool and chunk the user list based on the number of cores, setup the command for the map function
+        pool = multiprocessing.Pool(processes=threading)
+        chunked_user_list = chunkUsers(user_list, threading)
+        user_command = partial(attack, domain, target_ip, output, bypass, verbose, very_verbose, password, 
+                               user_list_clean, temp_users)
 
-    # create a pool and chunk the user list based on the number of cores, setup the command for the map function
-    pool = multiprocessing.Pool(processes=cpus)
-    chunked_user_list = chunkUsers(user_list, cpus)
-    user_command = partial(attack, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
-                           temp_users)
+        # run the for loop attack using the threaded rules
+        for user in chunked_user_list:
+            pool.map_async(user_command, user)
+        pool.close()
+        pool.join()
 
-    # run the for loop attack using the threaded rules
-    for user in chunked_user_list:
-        pool.map_async(user_command, user)
-    pool.close()
-    pool.join()
+    # if threading is not being used just run the attack without multiprocessing
+    else:
+        for user in user_list:
+            attack(domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean, temp_users,
+                   user)
+            time.sleep(rate_limit)
 
 
 # this function is the actual password attack
@@ -170,7 +172,8 @@ def attack(domain, target_ip, output, bypass, verbose, very_verbose, password, u
 
 
 # this function takes all the command line arguments and starts the spraying attack
-def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose):
+def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_limit, delay, verbose, very_verbose,
+            threading):
     # loop through each set of passwords, spraying each user
     print("Running")
     # remove the new line character from the users
@@ -192,7 +195,7 @@ def sprayer(domain, user_list, password_list, target_ip, output, bypass, rate_li
         # update the user_list based on found passwords or locked accounts
         user_list = temp_users[:]
         user_attack(user_list, domain, target_ip, output, bypass, verbose, very_verbose, password, user_list_clean,
-                    temp_users, rate_limit)
+                    temp_users, rate_limit, threading)
     print("Complete")
 
 
@@ -211,6 +214,8 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--bypass', action='store_true', help='Bypass locked accounts')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show Responses')
     parser.add_argument('-V', '--very_verbose', action='store_true', help='Show Requests and Responses')
+    parser.add_argument('-T', '--threading', nargs='?', default=False, const=int(multiprocessing.cpu_count()),
+                        help='Set number of parallel threads to spray')
 
     args = parser.parse_args()
 
@@ -240,9 +245,18 @@ if __name__ == '__main__':
     # select domain
     domain = args.domain
 
+    # set threading limit
+    if int(args.threading) < int(multiprocessing.cpu_count()):
+        threading = int(args.threading)
+    elif not args.threading:
+        threading = False
+    else:
+        threading = int(multiprocessing.cpu_count())
+
     # set rate_limit
     if args.rate is not None:
         rate_limit = int(args.rate)
+        threading = False
     else:
         rate_limit = 0
 
@@ -266,5 +280,5 @@ if __name__ == '__main__':
     very_verbose = args.very_verbose
 
     # run the program
-    sprayer(domain, users, passwords, target, output, bypass, rate_limit, delay, verbose, very_verbose)
+    sprayer(domain, users, passwords, target, output, bypass, rate_limit, delay, verbose, very_verbose, threading)
     # print(datetime.now() - startTime)
